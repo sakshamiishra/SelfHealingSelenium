@@ -430,6 +430,9 @@ test-results/
 .AppleDouble
 .LSOverride
 
+# Private development journal
+PROJECT_NOTES.md
+
 # Icon must end with two \r
 Icon
 
