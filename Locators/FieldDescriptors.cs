@@ -9,6 +9,7 @@ public class FieldDescriptor
     public string? Placeholder { get; set; }
     public string? Type { get; set; }
     public string? Value { get; set; }
+    public bool RequireAssociatedLabel { get; set; }
 }
 
 public static class FieldDescriptors
@@ -20,7 +21,8 @@ public static class FieldDescriptors
         Id = "fname",
         Name = "First Name",
         Placeholder = "Name",
-        Type = "text"
+        Type = "text",
+        RequireAssociatedLabel = true
     };
 
     public static readonly FieldDescriptor Gender = new()

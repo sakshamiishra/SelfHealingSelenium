@@ -7,8 +7,9 @@ public static class SelfHealingLocator
     // An exact ID is strong evidence, while name and placeholder are also useful
     // when an ID changes. Tag and type help confirm the kind of control.
     private const int IdWeight = 10;
-    private const int NameWeight = 8;
+    private const int NameWeight = 14;
     private const int PlaceholderWeight = 8;
+    private const int AssociatedLabelWeight = 10;
     private const int TagNameWeight = 2;
     private const int TypeWeight = 2;
 
@@ -20,10 +21,31 @@ public static class SelfHealingLocator
     public static IWebElement FindElement(IWebDriver driver, FieldDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(driver);
-        return FindElement((ISearchContext)driver, descriptor);
+        return FindElement((ISearchContext)driver, descriptor, (IJavaScriptExecutor)driver);
     }
 
     public static IWebElement FindElement(ISearchContext searchContext, FieldDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(searchContext);
+        ArgumentNullException.ThrowIfNull(descriptor);
+        return FindElement(searchContext, descriptor, searchContext as IJavaScriptExecutor);
+    }
+
+    public static IWebElement FindElement(
+        IWebDriver driver,
+        ISearchContext searchContext,
+        FieldDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(driver);
+        ArgumentNullException.ThrowIfNull(searchContext);
+        ArgumentNullException.ThrowIfNull(descriptor);
+        return FindElement(searchContext, descriptor, (IJavaScriptExecutor)driver);
+    }
+
+    private static IWebElement FindElement(
+        ISearchContext searchContext,
+        FieldDescriptor descriptor,
+        IJavaScriptExecutor? javaScriptExecutor)
     {
         ArgumentNullException.ThrowIfNull(searchContext);
         ArgumentNullException.ThrowIfNull(descriptor);
@@ -33,7 +55,7 @@ public static class SelfHealingLocator
             throw new ArgumentException("The field descriptor must include a tag name.", nameof(descriptor));
         }
 
-        var matches = new List<(IWebElement Element, int Score, string[] Evidence)>();
+        var matches = new List<(IWebElement Element, int Score, string[] Evidence, bool HasLabelMatch)>();
         var candidates = searchContext.FindElements(By.TagName(descriptor.TagName));
 
         foreach (var candidate in candidates)
@@ -73,18 +95,41 @@ public static class SelfHealingLocator
             AddAttributeEvidence(candidate, "name", descriptor.Name, NameWeight, ref score, evidence, ref identityMatches);
             AddAttributeEvidence(candidate, "placeholder", descriptor.Placeholder, PlaceholderWeight, ref score, evidence, ref identityMatches);
 
+            var hasLabelMatch = HasMatchingAssociatedLabel(javaScriptExecutor, candidate, descriptor.FieldName);
+            if (descriptor.RequireAssociatedLabel && !hasLabelMatch)
+            {
+                continue;
+            }
+
+            if (hasLabelMatch)
+            {
+                score += AssociatedLabelWeight;
+                evidence.Add("associated label text");
+                identityMatches++;
+            }
+
             // Tag and type alone describe a kind of control, not the requested field.
             if (identityMatches > 0)
             {
-                matches.Add((candidate, score, evidence.ToArray()));
+                matches.Add((candidate, score, evidence.ToArray(), hasLabelMatch));
             }
+        }
+
+        // An exact associated label is stronger semantic evidence than an
+        // unlabeled duplicate. Keep only labeled candidates when any are found.
+        if (matches.Any(match => match.HasLabelMatch))
+        {
+            matches = matches.Where(match => match.HasLabelMatch).ToList();
         }
 
         var rankedMatches = matches.OrderByDescending(match => match.Score).ToList();
         if (rankedMatches.Count == 0 || rankedMatches[0].Score < MinimumReliableScore)
         {
+            var reason = descriptor.RequireAssociatedLabel
+                ? $"No visible, enabled candidate has an associated label matching '{descriptor.FieldName}'."
+                : $"No reliable visible, enabled match was found for field '{descriptor.FieldName}'.";
             throw new NoSuchElementException(
-                $"No reliable visible, enabled match was found for field '{descriptor.FieldName}'.");
+                reason);
         }
 
         var bestMatch = rankedMatches[0];
@@ -122,7 +167,32 @@ public static class SelfHealingLocator
                 $"The anchor field '{anchorDescriptor.FieldName}' is not inside a form.");
         }
 
-        return FindElement((ISearchContext)form, targetDescriptor);
+        return FindElement(driver, (ISearchContext)form, targetDescriptor);
+    }
+
+    private static bool HasMatchingAssociatedLabel(
+        IJavaScriptExecutor? javaScriptExecutor,
+        IWebElement candidate,
+        string fieldName)
+    {
+        if (javaScriptExecutor is null || string.IsNullOrWhiteSpace(fieldName))
+        {
+            return false;
+        }
+
+        const string script = @"
+            const element = arguments[0];
+            const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            const expected = normalize(arguments[1]);
+            const labels = element && element.labels ? Array.from(element.labels) : [];
+            const candidateForm = element && element.form;
+            if (!candidateForm) return false;
+            return labels.some(label =>
+                normalize(label.textContent) === expected &&
+                label.closest('form') === candidateForm);
+        ";
+
+        return javaScriptExecutor.ExecuteScript(script, candidate, fieldName) is true;
     }
 
     private static void AddAttributeEvidence(
