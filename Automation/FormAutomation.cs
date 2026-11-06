@@ -1,5 +1,6 @@
 using OpenQA.Selenium;
 using SelfHealingSelenium.Config;
+using SelfHealingSelenium.Locators;
 
 namespace SelfHealingSelenium.Automation;
 
@@ -11,7 +12,7 @@ public static class FormAutomation
     {
         var results = new List<CheckResult>();
 
-        var firstName = driver.FindElement(By.Id("fname"));
+        var firstName = SelfHealingLocator.FindElement(driver, FieldDescriptors.FirstName);
         firstName.Clear();
         firstName.SendKeys(Settings.FirstName);
         var enteredFirstName = firstName.GetAttribute("value");
@@ -19,13 +20,19 @@ public static class FormAutomation
             enteredFirstName == Settings.FirstName,
             $"First Name is {(enteredFirstName == Settings.FirstName ? "verified" : "incorrect")}."));
 
-        var gender = driver.FindElement(By.Id("male"));
+        var gender = SelfHealingLocator.FindElementInSameForm(
+            driver,
+            FieldDescriptors.FirstName,
+            FieldDescriptors.Gender);
         gender.Click();
         results.Add(new CheckResult(
             gender.Selected,
             $"Gender {(gender.Selected ? "is selected" : "was not selected")}: {Settings.Gender}."));
 
-        var state = driver.FindElement(By.Id("state"));
+        var state = SelfHealingLocator.FindElementInSameForm(
+            driver,
+            FieldDescriptors.FirstName,
+            FieldDescriptors.State);
         state.FindElement(By.XPath($".//option[@value='{Settings.State}']")).Click();
         var selectedState = state.GetAttribute("value");
         results.Add(new CheckResult(
