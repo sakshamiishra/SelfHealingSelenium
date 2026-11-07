@@ -4,8 +4,15 @@ A C# Selenium console application that automates three fields in the CloudQA pra
 
 The project is an educational first version. Its locator rules are explicit and explainable; they are not AI or machine learning, and they cannot recover from every HTML change.
 
+## Demo Video
+
+This video demonstrates the SelfHealingSelenium project, including its form automation and self-healing locator behavior.
+
+[Watch the Task 1 Demonstration Video](https://drive.google.com/file/d/1kjNmxpajxNsm_MmQWjrcUYFU680nvAuo/view?usp=sharing)
+
 ## Table of Contents
 
+- [Demo Video](#demo-video)
 - [Problem and objectives](#problem-and-objectives)
 - [Technologies](#technologies)
 - [Features and locator design](#features-and-locator-design)
